@@ -1,3 +1,13 @@
 dist/
 .env
 node_modules/
+
+
+# Terraform local files
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# Generated Lambda deployment package
+infra/*.zip
