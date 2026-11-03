@@ -10,6 +10,12 @@ terraform {
       version = "~> 2.7"
     }
   }
+  backend "s3" {
+    bucket       = "devops-lambda-tfstate-eu-central-1"
+    key          = "devops-lambda-project/terraform.tfstate"
+    region       = "eu-central-1"
+    use_lockfile = true
+  }
 }
 
 # Configure the AWS Provider

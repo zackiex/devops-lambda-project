@@ -1,4 +1,4 @@
-name: Typescript Lmabda CI
+name: Typescript Lambda CI/CD
 
 on:
   push:
@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
+    name: Test TypeScript application
     runs-on: ubuntu-latest
+
     steps:
       - name: checkout code
         uses: actions/checkout@v7
@@ -22,5 +27,65 @@ jobs:
       - name: install dependencies
         run: npm ci
 
-      - name: build and test
+      - name: build application
+        run: npm run build
+
+      - name: test
         run: npm test
+
+  deploy:
+    name: Terraform Deployment plan
+    needs: test
+
+    #Only deploy when someone pushes directly to the main branch
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    #No two deployment jobs in this group run simultaneously.
+    concurrency:
+      group: terraform-deployment
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Lambda
+        run: npm run build
+
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: GitHubActions-${{ github.run_id }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.8"
+
+      - name: Terraform Init
+        working-directory: infra
+        run: terraform init -input=false
+      - name: Terraform Validate
+        working-directory: infra
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: infra
+        run: terraform plan -input=false -no-color
