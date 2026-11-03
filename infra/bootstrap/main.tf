@@ -69,3 +69,173 @@ output "state_bucket_name" {
   value = aws_s3_bucket.terraform_state.bucket
 }
 
+#Git Hub Actions Workflow for CI/CD
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com",
+  ]
+  tags = {
+    Project = "devops-lambda-project"
+    Purpose = "github-actions-oidc"
+  }
+}
+
+resource "aws_iam_role" "github_actions" {
+  name = "GitHubActionsTerraformRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+      {
+        Effect = "Allow"
+
+        Principal = {
+          Federated = aws_iam_openid_connect_provider.github.arn
+        }
+
+        Action = "sts:AssumeRoleWithWebIdentity"
+
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:sub" = var.github_oid_provider_url
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Project     = "devops-lambda-project"
+    Environment = "learning"
+    Purpose     = "github-actions-deployment"
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_deploy" {
+  name = "GitHubActionsLambdaDeployPolicy"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+
+    Statement = [
+
+      # 1. List only the main Terraform state path
+      {
+        Effect = "Allow"
+
+        Action = [
+          "s3:ListBucket"
+        ]
+
+        Resource = aws_s3_bucket.terraform_state.arn
+
+        Condition = {
+          StringLike = {
+            "s3:prefix" = [
+              "devops-lambda-project/terraform.tfstate*"
+            ]
+          }
+        }
+      },
+
+      # 2. Read and update the main Terraform state
+      {
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+
+        Resource = [
+          "${aws_s3_bucket.terraform_state.arn}/devops-lambda-project/terraform.tfstate"
+        ]
+      },
+
+      # 3. Manage the Terraform state lockfile
+      {
+        Effect = "Allow"
+
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+
+        Resource = [
+          "${aws_s3_bucket.terraform_state.arn}/devops-lambda-project/terraform.tfstate.tflock"
+        ]
+      },
+
+      # 4. Read and update the existing Lambda
+      {
+        Effect = "Allow"
+
+        Action = [
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration",
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:ListTags"
+        ]
+
+        Resource = "arn:aws:lambda:eu-central-1:${data.aws_caller_identity.current.account_id}:function:devops-lambda-project"
+      },
+
+      # 5. Read the Lambda CloudWatch log group
+      {
+        Effect = "Allow"
+
+        Action = [
+          "logs:DescribeLogGroups",
+          "logs:ListTagsForResource"
+        ]
+
+        Resource = "*"
+      },
+
+      # 6. Read the existing Lambda execution role
+      {
+        Effect = "Allow"
+
+        Action = [
+          "iam:GetRole",
+          "iam:ListAttachedRolePolicies",
+          "iam:ListRolePolicies",
+          "iam:ListRoleTags"
+        ]
+
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/devops-lambda-project-execution-role",
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ]
+      },
+
+      # 7. Pass only the Lambda execution role to Lambda
+      {
+        Effect = "Allow"
+
+        Action = [
+          "iam:PassRole"
+        ]
+
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/devops-lambda-project-execution-role"
+
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = "lambda.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
+
+output "github_actions_role_arn" {
+  value = aws_iam_role.github_actions.arn
+}
