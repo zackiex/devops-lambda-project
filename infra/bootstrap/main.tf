@@ -181,7 +181,8 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
           "lambda:GetFunctionConfiguration",
           "lambda:UpdateFunctionCode",
           "lambda:UpdateFunctionConfiguration",
-          "lambda:ListTags"
+          "lambda:ListTags",
+          "lambda:ListVersionsByFunction"
         ]
 
         Resource = "arn:aws:lambda:eu-central-1:${data.aws_caller_identity.current.account_id}:function:devops-lambda-project"
