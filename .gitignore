@@ -11,3 +11,6 @@ node_modules/
 
 # Generated Lambda deployment package
 infra/*.zip
+infra/bootstrap/var.tf
+
+tfplan

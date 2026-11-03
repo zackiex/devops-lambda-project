@@ -7,7 +7,7 @@ export const handler = async () => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      message: "Hello from my DevOps portfolio project!",
+      message: "CI/CD->Salem, this is a test Lambda function response",
       status: "healthy",
     }),
   };
